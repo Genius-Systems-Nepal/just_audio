@@ -65,7 +65,7 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
     static final String TAG = "AudioPlayer";
 
     private static Random random = new Random();
-
+    private Boolean isErrorCalled = false;
     private final Context context;
     private final MethodChannel methodChannel;
     private final BetterEventChannel eventChannel;
@@ -355,6 +355,7 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
 
     @Override
     public void onPlayerError(PlaybackException error) {
+        isErrorCalled = true;
         if (error instanceof ExoPlaybackException) {
             final ExoPlaybackException exoError = (ExoPlaybackException)error;
             switch (exoError.type) {
@@ -380,17 +381,17 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
             sendError(String.valueOf(error.errorCode), error.getMessage());
         }
         errorCount++;
-        if (player.hasNextWindow() && currentIndex != null && errorCount <= 5) {
-            int nextIndex = currentIndex + 1;
-            Timeline timeline = player.getCurrentTimeline();
-            // This condition is due to: https://github.com/ryanheise/just_audio/pull/310
-            if (nextIndex < timeline.getWindowCount()) {
-                // TODO: pass in initial position here.
-                player.setMediaSource(mediaSource);
-                player.prepare();
-                player.seekTo(nextIndex, 0);
-            }
-        }
+        // if (player.hasNextWindow() && currentIndex != null && errorCount <= 5) {
+        //     int nextIndex = currentIndex + 1;
+        //     Timeline timeline = player.getCurrentTimeline();
+        //     // This condition is due to: https://github.com/ryanheise/just_audio/pull/310
+        //     if (nextIndex < timeline.getWindowCount()) {
+        //         // TODO: pass in initial position here.
+        //         player.setMediaSource(mediaSource);
+        //         player.prepare();
+        //         player.seekTo(nextIndex, 0);
+        //     }
+        // }
     }
 
     private void completeSeek() {
@@ -956,6 +957,13 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
         seekResult = result;
         try {
             int windowIndex = index != null ? index : player.getCurrentWindowIndex();
+             if(isErrorCalled){
+                player.setMediaSource(mediaSource);
+                player.prepare();
+                isErrorCalled = false;
+                player.setPlayWhenReady(true);
+                broadcastImmediatePlaybackEvent();
+            }
             player.seekTo(windowIndex, position);
         } catch (RuntimeException e) {
             seekResult = null;
