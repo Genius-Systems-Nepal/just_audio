@@ -945,8 +945,18 @@ class AudioPlayer {
         } else {
           // If the native platform wasn't already active, activating it will
           // implicitly restore the playing state and send a play request.
+          // _setPlatformActive(true, playCompleter: playCompleter)
+          //     ?.catchError((dynamic e) async => null);
           _setPlatformActive(true, playCompleter: playCompleter)
-              ?.catchError((dynamic e) async => null);
+              ?.catchError((dynamic e) async {
+                print("RADIOERROR :: _setPlatformActive play $e ");
+                if(Platform.isAndroid) {
+                  _playingSubject.add(false);
+                  _playingSubject.addError(e);
+                  _playbackEventSubject.addError(e);
+                }
+
+          });
         }
       }
     } else {
@@ -1351,7 +1361,14 @@ class AudioPlayer {
             _playbackEvent.processingState == ProcessingState.idle) {
           _setPlatformActive(false)?.catchError((dynamic e) async => null);
         }
-      }, onError: _playbackEventSubject.addError);
+      }, onError: (error, stacktrace){
+            if(Platform.isAndroid) {
+              _playingSubject.addError(error,stacktrace);
+              _playbackEventSubject.addError(error, stacktrace);
+            }else{
+              _playbackEventSubject.addError(error,stacktrace);
+            }
+          });
     }
 
     Future<AudioPlayerPlatform> setPlatform() async {

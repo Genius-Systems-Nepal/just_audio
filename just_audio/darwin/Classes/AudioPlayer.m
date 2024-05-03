@@ -989,11 +989,12 @@
 - (void)sendError:(FlutterError *)flutterError playerItem:(IndexedPlayerItem *)playerItem {
     //NSLog(@"sendError");
     if (_loadResult && playerItem == _player.currentItem) {
+        [_eventChannel sendEvent:flutterError];
         _loadResult(flutterError);
         _loadResult = nil;
     }
     // Broadcast all errors even if they aren't on the current item.
-    [_eventChannel sendEvent:flutterError];
+//    [_eventChannel sendEvent:flutterError];
 }
 
 - (void)abortExistingConnection {
