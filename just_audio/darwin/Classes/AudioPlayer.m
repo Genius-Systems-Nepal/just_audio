@@ -486,7 +486,9 @@
 
 - (void)enqueueFrom:(int)index {
     //NSLog(@"### enqueueFrom:%d", index);
-    _index = index;
+    
+    //Commented below line due to issue where _index is set in this method but the media at this index fails to play. And also observer "currentItem" is not notified for failed item. So wrong value for _index is set in this case. This case can be observed in playlist. So 'index' is used instead of '_index' in this method.
+//    _index = index;
 
     // Update the queue while keeping the currently playing item untouched.
 
@@ -496,7 +498,7 @@
     // First, remove all _player items except for the currently playing one (if any).
     IndexedPlayerItem *oldItem = (IndexedPlayerItem *)_player.currentItem;
     IndexedPlayerItem *existingItem = nil;
-    IndexedPlayerItem *newItem = _indexedAudioSources.count > 0 ? _indexedAudioSources[_index].playerItem : nil;
+    IndexedPlayerItem *newItem = _indexedAudioSources.count > 0 ? _indexedAudioSources[index].playerItem : nil;
     NSArray *oldPlayerItems = [NSArray arrayWithArray:_player.items];
     // In the first pass, preserve the old and new items.
     for (int i = 0; i < oldPlayerItems.count; i++) {
@@ -508,7 +510,7 @@
             //NSLog(@"Preserving old item %d", [self indexForItem:oldItem]);
             // Temporarily preserve old item, just to avoid jumping to
             // intermediate queue positions unnecessarily. We only want to jump
-            // once to _index.
+            // once to index.
         } else {
             //NSLog(@"Removing item %d", [self indexForItem:oldPlayerItems[i]]);
             [_player removeItem:oldPlayerItems[i]];
@@ -530,7 +532,7 @@
         BOOL include = NO;
         for (int i = 0; i < [_order count]; i++) {
             int si = [_order[i] intValue];
-            if (si == _index) include = YES;
+            if (si == index) include = YES;
             if (include && _indexedAudioSources[si].playerItem != existingItem) {
                 if (_indexedAudioSources[si].lazyLoading && _player.items.count >= TREADMILL_SIZE) {
                     // Enqueue up until the first lazy item that does not fit on the treadmill.
@@ -558,12 +560,12 @@
             }
             [_player insertItem:_indexedAudioSources[si].playerItem2 afterItem:nil];
         } else if (_loopMode == loopOne) {
-            //NSLog(@"### add loop item:%d", _index);
-            if (!_indexedAudioSources[_index].playerItem2) {
-                [_indexedAudioSources[_index] preparePlayerItem2];
-                [self addItemObservers:_indexedAudioSources[_index].playerItem2];
+            //NSLog(@"### add loop item:%d", index);
+            if (!_indexedAudioSources[index].playerItem2) {
+                [_indexedAudioSources[index] preparePlayerItem2];
+                [self addItemObservers:_indexedAudioSources[index].playerItem2];
             }
-            [_player insertItem:_indexedAudioSources[_index].playerItem2 afterItem:nil];
+            [_player insertItem:_indexedAudioSources[index].playerItem2 afterItem:nil];
         }
     }
 
@@ -887,11 +889,12 @@
         }
     } else if ([keyPath isEqualToString:@"currentItem"] && _player.currentItem) {
         IndexedPlayerItem *playerItem = (IndexedPlayerItem *)change[NSKeyValueChangeNewKey];
+        int currentItemIndex = [self indexForItem:playerItem];
         //IndexedPlayerItem *oldPlayerItem = (IndexedPlayerItem *)change[NSKeyValueChangeOldKey];
         if (playerItem.status == AVPlayerItemStatusFailed) {
-            if ([_orderInv[_index] intValue] + 1 < [_order count]) {
+            if ([_orderInv[currentItemIndex] intValue] + 1 < [_order count]) {
                 // account for automatic move to next item
-                _index = [_order[[_orderInv[_index] intValue] + 1] intValue];
+                _index = [_order[[_orderInv[currentItemIndex] intValue] + 1] intValue];
                 //NSLog(@"advance to next on error: index = %d", _index);
                 [self updateEndAction];
                 [self broadcastPlaybackEvent];
@@ -900,12 +903,11 @@
             }
             return;
         } else {
-            int expectedIndex = [self indexForItem:playerItem];
-            if (_index != expectedIndex) {
+            if (_index != currentItemIndex) {
                 // AVQueuePlayer will sometimes skip over error items without
                 // notifying this observer.
                 //NSLog(@"Queue change detected. Adjusting index from %d -> %d", _index, expectedIndex);
-                _index = expectedIndex;
+                _index = currentItemIndex;
                 [self updateEndAction];
                 [self broadcastPlaybackEvent];
             }
