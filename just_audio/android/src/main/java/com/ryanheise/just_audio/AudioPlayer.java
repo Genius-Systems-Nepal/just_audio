@@ -390,7 +390,8 @@ public class AudioPlayer implements MethodCallHandler, Player.Listener, Metadata
         }
         errorCount++;
         if (player.hasNextMediaItem() && currentIndex != null && errorCount <= 5) {
-            int nextIndex = currentIndex + 1;
+            //Current index is not increase => issue on Catchup and Dvr playing
+            int nextIndex = currentIndex;
             Timeline timeline = player.getCurrentTimeline();
             // This condition is due to: https://github.com/ryanheise/just_audio/pull/310
             if (nextIndex < timeline.getWindowCount()) {
