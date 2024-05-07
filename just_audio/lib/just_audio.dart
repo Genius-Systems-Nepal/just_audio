@@ -127,7 +127,7 @@ class AudioPlayer {
   final _shuffleModeEnabledSubject = BehaviorSubject.seeded(false);
   final _androidAudioSessionIdSubject = BehaviorSubject<int?>();
   final _positionDiscontinuitySubject =
-      PublishSubject<PositionDiscontinuity>(sync: true);
+  PublishSubject<PositionDiscontinuity>(sync: true);
   var _seeking = false;
   // ignore: close_sinks
   BehaviorSubject<Duration>? _positionSubject;
@@ -255,7 +255,7 @@ class AudioPlayer {
       currentIndexStream,
       shuffleModeEnabledStream,
       loopModeStream,
-      (sequence, shuffleIndices, currentIndex, shuffleModeEnabled, loopMode) {
+          (sequence, shuffleIndices, currentIndex, shuffleModeEnabled, loopMode) {
         if (sequence == null) return null;
         if (shuffleIndices == null) return null;
         currentIndex ??= 0;
@@ -271,8 +271,8 @@ class AudioPlayer {
     ).distinct().handleError((Object err, StackTrace stackTrace) {/* noop */}));
     _playerStateSubject.addStream(
         Rx.combineLatest2<bool, PlaybackEvent, PlayerState>(
-                playingStream,
-                playbackEventStream,
+            playingStream,
+            playbackEventStream,
                 (playing, event) => PlayerState(playing, event.processingState))
             .distinct()
             .handleError((Object err, StackTrace stackTrace) {/* noop */}));
@@ -679,11 +679,11 @@ class AudioPlayer {
   ///
   /// See [setAudioSource] for a detailed explanation of the options.
   Future<Duration?> setUrl(
-    String url, {
-    Map<String, String>? headers,
-    Duration? initialPosition,
-    bool preload = true,
-  }) =>
+      String url, {
+        Map<String, String>? headers,
+        Duration? initialPosition,
+        bool preload = true,
+      }) =>
       setAudioSource(AudioSource.uri(Uri.parse(url), headers: headers),
           initialPosition: initialPosition, preload: preload);
 
@@ -699,10 +699,10 @@ class AudioPlayer {
   ///
   /// See [setAudioSource] for a detailed explanation of the options.
   Future<Duration?> setFilePath(
-    String filePath, {
-    Duration? initialPosition,
-    bool preload = true,
-  }) =>
+      String filePath, {
+        Duration? initialPosition,
+        bool preload = true,
+      }) =>
       setAudioSource(AudioSource.file(filePath),
           initialPosition: initialPosition, preload: preload);
 
@@ -721,11 +721,11 @@ class AudioPlayer {
   ///
   /// See [setAudioSource] for a detailed explanation of the options.
   Future<Duration?> setAsset(
-    String assetPath, {
-    String? package,
-    bool preload = true,
-    Duration? initialPosition,
-  }) =>
+      String assetPath, {
+        String? package,
+        bool preload = true,
+        Duration? initialPosition,
+      }) =>
       setAudioSource(
         AudioSource.asset(assetPath, package: package),
         initialPosition: initialPosition,
@@ -754,11 +754,11 @@ class AudioPlayer {
   /// this call completed or the player was stopped or disposed of before the
   /// call completed.
   Future<Duration?> setAudioSource(
-    AudioSource source, {
-    bool preload = true,
-    int? initialIndex,
-    Duration? initialPosition,
-  }) async {
+      AudioSource source, {
+        bool preload = true,
+        int? initialIndex,
+        Duration? initialPosition,
+      }) async {
     if (_disposed) return null;
     _audioSource = null;
     _initialSeekValues =
@@ -847,10 +847,10 @@ class AudioPlayer {
       _broadcastSequence();
       _durationFuture = platform
           .load(LoadRequest(
-            audioSourceMessage: source._toMessage(),
-            initialPosition: initialSeekValues?.position,
-            initialIndex: initialSeekValues?.index,
-          ))
+        audioSourceMessage: source._toMessage(),
+        initialPosition: initialSeekValues?.position,
+        initialIndex: initialSeekValues?.index,
+      ))
           .then((response) => response.duration);
       final duration = await _durationFuture;
       checkInterruption();
@@ -891,10 +891,10 @@ class AudioPlayer {
         start == null && end == null
             ? _audioSource!
             : ClippingAudioSource(
-                child: _audioSource as UriAudioSource,
-                start: start,
-                end: end,
-              ));
+          child: _audioSource as UriAudioSource,
+          start: start,
+          end: end,
+        ));
     return duration;
   }
 
@@ -941,7 +941,9 @@ class AudioPlayer {
           // NOTE: If a load() request happens simultaneously, this may result
           // in two play requests being sent. The platform implementation should
           // ignore the second play request since it is already playing.
-          _sendPlayRequest(await _platform, playCompleter);
+          _sendPlayRequest(await _platform, playCompleter).catchError((dynamic e){
+            print("RADIOERROR :: _sendPlayRequest play $e ");
+          });
         } else {
           // If the native platform wasn't already active, activating it will
           // implicitly restore the playing state and send a play request.
@@ -949,12 +951,12 @@ class AudioPlayer {
           //     ?.catchError((dynamic e) async => null);
           _setPlatformActive(true, playCompleter: playCompleter)
               ?.catchError((dynamic e) async {
-                print("RADIOERROR :: _setPlatformActive play $e ");
-                if(Platform.isAndroid) {
-                  _playingSubject.add(false);
-                  _playingSubject.addError(e);
-                  _playbackEventSubject.addError(e);
-                }
+            print("RADIOERROR :: _setPlatformActive play $e ");
+            if(Platform.isAndroid) {
+              _playingSubject.add(false);
+              _playingSubject.addError(e);
+              _playbackEventSubject.addError(e);
+            }
 
           });
         }
@@ -990,7 +992,16 @@ class AudioPlayer {
     try {
       if (!playing) return; // defensive
       await platform.play(PlayRequest());
-      playCompleter?.complete();
+
+      if(Platform.isAndroid) {
+        if (playCompleter != null) {
+          playCompleter?.complete();
+        } else {
+          throw PlayerException(1111, "error");
+        }
+      }else{
+        playCompleter?.complete();
+      }
     } catch (e, stackTrace) {
       playCompleter?.completeError(e, stackTrace);
     }
@@ -1007,7 +1018,7 @@ class AudioPlayer {
   Future<void> stop() async {
     if (_disposed) return;
     final future =
-        _setPlatformActive(false)?.catchError((dynamic e) async => null);
+    _setPlatformActive(false)?.catchError((dynamic e) async => null);
 
     _playInterrupted = false;
     // Update local state immediately so that queries aren't surprised.
@@ -1080,7 +1091,7 @@ class AudioPlayer {
     _shuffleModeEnabledSubject.add(enabled);
     await (await _platform).setShuffleMode(SetShuffleModeRequest(
         shuffleMode:
-            enabled ? ShuffleModeMessage.all : ShuffleModeMessage.none));
+        enabled ? ShuffleModeMessage.all : ShuffleModeMessage.none));
   }
 
   /// Recursively shuffles the children of the currently loaded [AudioSource].
@@ -1116,8 +1127,8 @@ class AudioPlayer {
         canUseNetworkResourcesForLiveStreamingWhilePaused;
     await (await _platform)
         .setCanUseNetworkResourcesForLiveStreamingWhilePaused(
-            SetCanUseNetworkResourcesForLiveStreamingWhilePausedRequest(
-                enabled: canUseNetworkResourcesForLiveStreamingWhilePaused));
+        SetCanUseNetworkResourcesForLiveStreamingWhilePausedRequest(
+            enabled: canUseNetworkResourcesForLiveStreamingWhilePaused));
   }
 
   /// Sets preferredPeakBitRate on iOS/macOS, defaults to true.
@@ -1281,7 +1292,7 @@ class AudioPlayer {
       if (!active) return true;
       // An interruption that should throw
       final e =
-          PlatformException(code: 'abort', message: 'Loading interrupted');
+      PlatformException(code: 'abort', message: 'Loading interrupted');
       durationCompleter.completeError(e);
       throw e;
     }
@@ -1296,72 +1307,72 @@ class AudioPlayer {
     void subscribeToEvents(AudioPlayerPlatform platform) {
       _playerDataSubscription =
           platform.playerDataMessageStream.listen((message) {
-        if (message.playing != null && message.playing != playing) {
-          _playingSubject.add(message.playing!);
-        }
-        if (message.volume != null) {
-          _volumeSubject.add(message.volume!);
-        }
-        if (message.speed != null) {
-          _speedSubject.add(message.speed!);
-        }
-        if (message.pitch != null) {
-          _pitchSubject.add(message.pitch!);
-        }
-        if (message.loopMode != null) {
-          _loopModeSubject.add(LoopMode.values[message.loopMode!.index]);
-        }
-        if (message.shuffleMode != null) {
-          _shuffleModeEnabledSubject
-              .add(message.shuffleMode != ShuffleModeMessage.none);
-        }
-      });
+            if (message.playing != null && message.playing != playing) {
+              _playingSubject.add(message.playing!);
+            }
+            if (message.volume != null) {
+              _volumeSubject.add(message.volume!);
+            }
+            if (message.speed != null) {
+              _speedSubject.add(message.speed!);
+            }
+            if (message.pitch != null) {
+              _pitchSubject.add(message.pitch!);
+            }
+            if (message.loopMode != null) {
+              _loopModeSubject.add(LoopMode.values[message.loopMode!.index]);
+            }
+            if (message.shuffleMode != null) {
+              _shuffleModeEnabledSubject
+                  .add(message.shuffleMode != ShuffleModeMessage.none);
+            }
+          });
       _playbackEventSubscription =
           platform.playbackEventMessageStream.listen((message) {
-        var duration = message.duration;
-        var index = message.currentIndex ?? currentIndex;
-        if (index != null && sequence != null && index < sequence!.length) {
-          if (duration == null) {
-            duration = sequence![index].duration;
-          } else {
-            sequence![index].duration = duration;
-          }
-        }
-        if (_platformLoading &&
-            message.processingState != ProcessingStateMessage.idle) {
-          _platformLoading = false;
-        }
-        final playbackEvent = PlaybackEvent(
-          // The platform may emit an idle state while it's starting up which we
-          // override here.
-          processingState: _platformLoading
-              ? ProcessingState.loading
-              : ProcessingState.values[message.processingState.index],
-          updateTime: message.updateTime,
-          updatePosition: message.updatePosition,
-          bufferedPosition: message.bufferedPosition,
-          duration: duration,
-          icyMetadata: message.icyMetadata == null
-              ? null
-              : IcyMetadata._fromMessage(message.icyMetadata!),
-          currentIndex: index,
-          androidAudioSessionId: message.androidAudioSessionId,
-        );
-        _durationFuture = Future.value(playbackEvent.duration);
-        if (playbackEvent == _playbackEvent) {
-          return;
-        }
-        if (playbackEvent.duration != _playbackEvent.duration) {
-          _durationSubject.add(playbackEvent.duration);
-        }
-        final oldPlaybackEvent = _playbackEvent;
-        _playbackEventSubject.add(_playbackEvent = playbackEvent);
-        if (_playbackEvent.processingState !=
+            var duration = message.duration;
+            var index = message.currentIndex ?? currentIndex;
+            if (index != null && sequence != null && index < sequence!.length) {
+              if (duration == null) {
+                duration = sequence![index].duration;
+              } else {
+                sequence![index].duration = duration;
+              }
+            }
+            if (_platformLoading &&
+                message.processingState != ProcessingStateMessage.idle) {
+              _platformLoading = false;
+            }
+            final playbackEvent = PlaybackEvent(
+              // The platform may emit an idle state while it's starting up which we
+              // override here.
+              processingState: _platformLoading
+                  ? ProcessingState.loading
+                  : ProcessingState.values[message.processingState.index],
+              updateTime: message.updateTime,
+              updatePosition: message.updatePosition,
+              bufferedPosition: message.bufferedPosition,
+              duration: duration,
+              icyMetadata: message.icyMetadata == null
+                  ? null
+                  : IcyMetadata._fromMessage(message.icyMetadata!),
+              currentIndex: index,
+              androidAudioSessionId: message.androidAudioSessionId,
+            );
+            _durationFuture = Future.value(playbackEvent.duration);
+            if (playbackEvent == _playbackEvent) {
+              return;
+            }
+            if (playbackEvent.duration != _playbackEvent.duration) {
+              _durationSubject.add(playbackEvent.duration);
+            }
+            final oldPlaybackEvent = _playbackEvent;
+            _playbackEventSubject.add(_playbackEvent = playbackEvent);
+            if (_playbackEvent.processingState !=
                 oldPlaybackEvent.processingState &&
-            _playbackEvent.processingState == ProcessingState.idle) {
-          _setPlatformActive(false)?.catchError((dynamic e) async => null);
-        }
-      }, onError: (error, stacktrace){
+                _playbackEvent.processingState == ProcessingState.idle) {
+              _setPlatformActive(false)?.catchError((dynamic e) async => null);
+            }
+          }, onError: (error, stacktrace){
             if(Platform.isAndroid) {
               _playingSubject.addError(error,stacktrace);
               _playbackEventSubject.addError(error, stacktrace);
@@ -1385,22 +1396,22 @@ class AudioPlayer {
       // _platform is updated again during initialisation.
       final platform = active
           ? await (_nativePlatform = _pluginPlatform.init(InitRequest(
-              id: _id,
-              audioLoadConfiguration: _audioLoadConfiguration?._toMessage(),
-              androidAudioEffects: (_isAndroid() || _isUnitTest())
-                  ? _audioPipeline.androidAudioEffects
-                      .map((audioEffect) => audioEffect._toMessage())
-                      .toList()
-                  : [],
-              darwinAudioEffects: (_isDarwin() || _isUnitTest())
-                  ? _audioPipeline.darwinAudioEffects
-                      .map((audioEffect) => audioEffect._toMessage())
-                      .toList()
-                  : [],
-              androidOffloadSchedulingEnabled: _androidOffloadSchedulingEnabled,
-            )))
+        id: _id,
+        audioLoadConfiguration: _audioLoadConfiguration?._toMessage(),
+        androidAudioEffects: (_isAndroid() || _isUnitTest())
+            ? _audioPipeline.androidAudioEffects
+            .map((audioEffect) => audioEffect._toMessage())
+            .toList()
+            : [],
+        darwinAudioEffects: (_isDarwin() || _isUnitTest())
+            ? _audioPipeline.darwinAudioEffects
+            .map((audioEffect) => audioEffect._toMessage())
+            .toList()
+            : [],
+        androidOffloadSchedulingEnabled: _androidOffloadSchedulingEnabled,
+      )))
           : (_idlePlatform =
-              _IdleAudioPlayer(id: _id, sequenceStream: sequenceStream));
+          _IdleAudioPlayer(id: _id, sequenceStream: sequenceStream));
       if (checkInterruption()) return platform;
 
       _platformValue = platform;
@@ -1479,8 +1490,17 @@ class AudioPlayer {
           final initialSeekValues = _initialSeekValues ??
               _InitialSeekValues(position: position, index: currentIndex);
           _initialSeekValues = null;
-          final duration = await _load(platform, _audioSource!,
-              initialSeekValues: initialSeekValues);
+          if(Platform.isAndroid) {
+            final duration = await _load(platform, _audioSource!,
+                initialSeekValues: initialSeekValues).onError((error, stackTrace) {
+              print("LOAD ERROR 1 =================");
+            }).catchError((onError) {
+              print("LOAD ERROR 2=================");
+            });
+          }else{
+            final duration = await _load(platform, _audioSource!,
+                initialSeekValues: initialSeekValues);
+          }
           if (checkInterruption()) return platform;
           durationCompleter.complete(duration);
         } catch (e, stackTrace) {
@@ -1619,33 +1639,33 @@ class PlaybackEvent {
         icyMetadata: icyMetadata ?? this.icyMetadata,
         currentIndex: currentIndex ?? this.currentIndex,
         androidAudioSessionId:
-            androidAudioSessionId ?? this.androidAudioSessionId,
+        androidAudioSessionId ?? this.androidAudioSessionId,
       );
 
   @override
   int get hashCode => Object.hash(
-        processingState,
-        updateTime,
-        updatePosition,
-        bufferedPosition,
-        duration,
-        icyMetadata,
-        currentIndex,
-        androidAudioSessionId,
-      );
+    processingState,
+    updateTime,
+    updatePosition,
+    bufferedPosition,
+    duration,
+    icyMetadata,
+    currentIndex,
+    androidAudioSessionId,
+  );
 
   @override
   bool operator ==(Object other) =>
       other.runtimeType == runtimeType &&
-      other is PlaybackEvent &&
-      processingState == other.processingState &&
-      updateTime == other.updateTime &&
-      updatePosition == other.updatePosition &&
-      bufferedPosition == other.bufferedPosition &&
-      duration == other.duration &&
-      icyMetadata == other.icyMetadata &&
-      currentIndex == other.currentIndex &&
-      androidAudioSessionId == other.androidAudioSessionId;
+          other is PlaybackEvent &&
+          processingState == other.processingState &&
+          updateTime == other.updateTime &&
+          updatePosition == other.updatePosition &&
+          bufferedPosition == other.bufferedPosition &&
+          duration == other.duration &&
+          icyMetadata == other.icyMetadata &&
+          currentIndex == other.currentIndex &&
+          androidAudioSessionId == other.androidAudioSessionId;
 
   @override
   String toString() =>
@@ -1693,9 +1713,9 @@ class PlayerState {
   @override
   bool operator ==(Object other) =>
       other.runtimeType == runtimeType &&
-      other is PlayerState &&
-      other.playing == playing &&
-      other.processingState == processingState;
+          other is PlayerState &&
+          other.playing == playing &&
+          other.processingState == processingState;
 }
 
 class IcyInfo {
@@ -1703,9 +1723,9 @@ class IcyInfo {
   final String? url;
 
   static IcyInfo _fromMessage(IcyInfoMessage message) => IcyInfo(
-        title: message.title,
-        url: message.url,
-      );
+    title: message.title,
+    url: message.url,
+  );
 
   IcyInfo({required this.title, required this.url});
 
@@ -1718,9 +1738,9 @@ class IcyInfo {
   @override
   bool operator ==(Object other) =>
       other.runtimeType == runtimeType &&
-      other is IcyInfo &&
-      other.title == title &&
-      other.url == url;
+          other is IcyInfo &&
+          other.title == title &&
+          other.url == url;
 }
 
 class IcyHeaders {
@@ -1732,13 +1752,13 @@ class IcyHeaders {
   final bool? isPublic;
 
   static IcyHeaders _fromMessage(IcyHeadersMessage message) => IcyHeaders(
-        bitrate: message.bitrate,
-        genre: message.genre,
-        name: message.name,
-        metadataInterval: message.metadataInterval,
-        url: message.url,
-        isPublic: message.isPublic,
-      );
+    bitrate: message.bitrate,
+    genre: message.genre,
+    name: message.name,
+    metadataInterval: message.metadataInterval,
+    url: message.url,
+    isPublic: message.isPublic,
+  );
 
   IcyHeaders({
     required this.bitrate,
@@ -1759,13 +1779,13 @@ class IcyHeaders {
   @override
   bool operator ==(Object other) =>
       other.runtimeType == runtimeType &&
-      other is IcyHeaders &&
-      other.bitrate == bitrate &&
-      other.genre == genre &&
-      other.name == name &&
-      other.metadataInterval == metadataInterval &&
-      other.url == url &&
-      other.isPublic == isPublic;
+          other is IcyHeaders &&
+          other.bitrate == bitrate &&
+          other.genre == genre &&
+          other.name == name &&
+          other.metadataInterval == metadataInterval &&
+          other.url == url &&
+          other.isPublic == isPublic;
 }
 
 class IcyMetadata {
@@ -1773,11 +1793,11 @@ class IcyMetadata {
   final IcyHeaders? headers;
 
   static IcyMetadata _fromMessage(IcyMetadataMessage message) => IcyMetadata(
-        info: message.info == null ? null : IcyInfo._fromMessage(message.info!),
-        headers: message.headers == null
-            ? null
-            : IcyHeaders._fromMessage(message.headers!),
-      );
+    info: message.info == null ? null : IcyInfo._fromMessage(message.info!),
+    headers: message.headers == null
+        ? null
+        : IcyHeaders._fromMessage(message.headers!),
+  );
 
   IcyMetadata({required this.info, required this.headers});
 
@@ -1787,9 +1807,9 @@ class IcyMetadata {
   @override
   bool operator ==(Object other) =>
       other.runtimeType == runtimeType &&
-      other is IcyMetadata &&
-      other.info == info &&
-      other.headers == headers;
+          other is IcyMetadata &&
+          other.info == info &&
+          other.headers == headers;
 }
 
 /// Encapsulates the [sequence] and [currentIndex] state and ensures
@@ -1844,11 +1864,11 @@ class AudioLoadConfiguration {
   });
 
   AudioLoadConfigurationMessage _toMessage() => AudioLoadConfigurationMessage(
-        darwinLoadControl: darwinLoadControl?._toMessage(),
-        androidLoadControl: androidLoadControl?._toMessage(),
-        androidLivePlaybackSpeedControl:
-            androidLivePlaybackSpeedControl?._toMessage(),
-      );
+    darwinLoadControl: darwinLoadControl?._toMessage(),
+    androidLoadControl: androidLoadControl?._toMessage(),
+    androidLivePlaybackSpeedControl:
+    androidLivePlaybackSpeedControl?._toMessage(),
+  );
 }
 
 /// Buffering and loading options for iOS/macOS.
@@ -1878,13 +1898,13 @@ class DarwinLoadControl {
   });
 
   DarwinLoadControlMessage _toMessage() => DarwinLoadControlMessage(
-        automaticallyWaitsToMinimizeStalling:
-            automaticallyWaitsToMinimizeStalling,
-        preferredForwardBufferDuration: preferredForwardBufferDuration,
-        canUseNetworkResourcesForLiveStreamingWhilePaused:
-            canUseNetworkResourcesForLiveStreamingWhilePaused,
-        preferredPeakBitRate: preferredPeakBitRate,
-      );
+    automaticallyWaitsToMinimizeStalling:
+    automaticallyWaitsToMinimizeStalling,
+    preferredForwardBufferDuration: preferredForwardBufferDuration,
+    canUseNetworkResourcesForLiveStreamingWhilePaused:
+    canUseNetworkResourcesForLiveStreamingWhilePaused,
+    preferredPeakBitRate: preferredPeakBitRate,
+  );
 }
 
 /// Buffering and loading options for Android.
@@ -1926,15 +1946,15 @@ class AndroidLoadControl {
   });
 
   AndroidLoadControlMessage _toMessage() => AndroidLoadControlMessage(
-        minBufferDuration: minBufferDuration,
-        maxBufferDuration: maxBufferDuration,
-        bufferForPlaybackDuration: bufferForPlaybackDuration,
-        bufferForPlaybackAfterRebufferDuration:
-            bufferForPlaybackAfterRebufferDuration,
-        targetBufferBytes: targetBufferBytes,
-        prioritizeTimeOverSizeThresholds: prioritizeTimeOverSizeThresholds,
-        backBufferDuration: backBufferDuration,
-      );
+    minBufferDuration: minBufferDuration,
+    maxBufferDuration: maxBufferDuration,
+    bufferForPlaybackDuration: bufferForPlaybackDuration,
+    bufferForPlaybackAfterRebufferDuration:
+    bufferForPlaybackAfterRebufferDuration,
+    targetBufferBytes: targetBufferBytes,
+    prioritizeTimeOverSizeThresholds: prioritizeTimeOverSizeThresholds,
+    backBufferDuration: backBufferDuration,
+  );
 }
 
 /// Speed control for live streams on Android.
@@ -1975,7 +1995,7 @@ class AndroidLivePlaybackSpeedControl {
     this.proportionalControlFactor = 1.0,
     this.maxLiveOffsetErrorForUnitSpeed = const Duration(milliseconds: 20),
     this.targetLiveOffsetIncrementOnRebuffer =
-        const Duration(milliseconds: 500),
+    const Duration(milliseconds: 500),
     this.minPossibleLiveOffsetSmoothingFactor = 0.999,
   });
 
@@ -1987,9 +2007,9 @@ class AndroidLivePlaybackSpeedControl {
         proportionalControlFactor: proportionalControlFactor,
         maxLiveOffsetErrorForUnitSpeed: maxLiveOffsetErrorForUnitSpeed,
         targetLiveOffsetIncrementOnRebuffer:
-            targetLiveOffsetIncrementOnRebuffer,
+        targetLiveOffsetIncrementOnRebuffer,
         minPossibleLiveOffsetSmoothingFactor:
-            minPossibleLiveOffsetSmoothingFactor,
+        minPossibleLiveOffsetSmoothingFactor,
       );
 }
 
@@ -2015,8 +2035,8 @@ class DarwinAssetOptions {
   const DarwinAssetOptions({this.preferPreciseDurationAndTiming = false});
 
   DarwinAssetOptionsMessage _toMessage() => DarwinAssetOptionsMessage(
-        preferPreciseDurationAndTiming: preferPreciseDurationAndTiming,
-      );
+    preferPreciseDurationAndTiming: preferPreciseDurationAndTiming,
+  );
 }
 
 class AndroidExtractorOptions {
@@ -2034,11 +2054,11 @@ class AndroidExtractorOptions {
   });
 
   AndroidExtractorOptionsMessage _toMessage() => AndroidExtractorOptionsMessage(
-        constantBitrateSeekingEnabled: constantBitrateSeekingEnabled,
-        constantBitrateSeekingAlwaysEnabled:
-            constantBitrateSeekingAlwaysEnabled,
-        mp3Flags: mp3Flags,
-      );
+    constantBitrateSeekingEnabled: constantBitrateSeekingEnabled,
+    constantBitrateSeekingAlwaysEnabled:
+    constantBitrateSeekingAlwaysEnabled,
+    mp3Flags: mp3Flags,
+  );
 }
 
 /// A local proxy HTTP server for making remote GET requests with headers.
@@ -2198,7 +2218,7 @@ abstract class AudioSource {
       {Map<String, String>? headers, dynamic tag}) {
     bool hasExtension(Uri uri, String extension) =>
         uri.path.toLowerCase().endsWith('.$extension') ||
-        uri.fragment.toLowerCase().endsWith('.$extension');
+            uri.fragment.toLowerCase().endsWith('.$extension');
     if (hasExtension(uri, 'mpd')) {
       return DashAudioSource(uri, headers: headers, tag: tag);
     } else if (hasExtension(uri, 'm3u8')) {
@@ -2232,7 +2252,7 @@ abstract class AudioSource {
   static UriAudioSource asset(String assetPath,
       {String? package, dynamic tag}) {
     final keyName =
-        package == null ? assetPath : 'packages/$package/$assetPath';
+    package == null ? assetPath : 'packages/$package/$assetPath';
     return AudioSource.uri(Uri.parse('asset:///$keyName'), tag: tag);
   }
 
@@ -2266,8 +2286,8 @@ abstract class AudioSource {
   @override
   bool operator ==(Object other) =>
       other.runtimeType == runtimeType &&
-      other is AudioSource &&
-      other._id == _id;
+          other is AudioSource &&
+          other._id == _id;
 }
 
 /// An [AudioSource] that can appear in a sequence.
@@ -2305,10 +2325,10 @@ abstract class UriAudioSource extends IndexedAudioSource {
       headers == null && _userAgent == null
           ? null
           : {
-              if (headers != null)
-                for (var key in headers!.keys) key: headers![key]!,
-              if (_userAgent != null) 'User-Agent': _userAgent!,
-            };
+        if (headers != null)
+          for (var key in headers!.keys) key: headers![key]!,
+        if (_userAgent != null) 'User-Agent': _userAgent!,
+      };
 
   @override
   Future<void> _setup(AudioPlayer player) async {
@@ -2366,10 +2386,10 @@ abstract class UriAudioSource extends IndexedAudioSource {
 
   /// Get file for caching asset media with proper extension
   Future<File> _getCacheFile(final String assetPath) async => File(p.joinAll([
-        (await _getCacheDir()).path,
-        'assets',
-        ...Uri.parse(assetPath).pathSegments,
-      ]));
+    (await _getCacheDir()).path,
+    'assets',
+    ...Uri.parse(assetPath).pathSegments,
+  ]));
 }
 
 /// An [AudioSource] representing a regular media file such as an MP3 or M4A
@@ -2389,21 +2409,21 @@ class ProgressiveAudioSource extends UriAudioSource {
   final ProgressiveAudioSourceOptions? options;
 
   ProgressiveAudioSource(
-    super.uri, {
-    super.headers,
-    super.tag,
-    super.duration,
-    this.options,
-  });
+      super.uri, {
+        super.headers,
+        super.tag,
+        super.duration,
+        this.options,
+      });
 
   @override
   AudioSourceMessage _toMessage() => ProgressiveAudioSourceMessage(
-        id: _id,
-        uri: _effectiveUri.toString(),
-        headers: _mergedHeaders,
-        tag: tag,
-        options: options?._toMessage(),
-      );
+    id: _id,
+    uri: _effectiveUri.toString(),
+    headers: _mergedHeaders,
+    tag: tag,
+    options: options?._toMessage(),
+  );
 }
 
 /// An [AudioSource] representing a DASH stream. The following URI schemes are
@@ -2427,11 +2447,11 @@ class DashAudioSource extends UriAudioSource {
 
   @override
   AudioSourceMessage _toMessage() => DashAudioSourceMessage(
-        id: _id,
-        uri: _effectiveUri.toString(),
-        headers: _mergedHeaders,
-        tag: tag,
-      );
+    id: _id,
+    uri: _effectiveUri.toString(),
+    headers: _mergedHeaders,
+    tag: tag,
+  );
 }
 
 /// An [AudioSource] representing an HLS stream. The following URI schemes are
@@ -2454,11 +2474,11 @@ class HlsAudioSource extends UriAudioSource {
 
   @override
   AudioSourceMessage _toMessage() => HlsAudioSourceMessage(
-        id: _id,
-        uri: _effectiveUri.toString(),
-        headers: _mergedHeaders,
-        tag: tag,
-      );
+    id: _id,
+    uri: _effectiveUri.toString(),
+    headers: _mergedHeaders,
+    tag: tag,
+  );
 }
 
 /// An [AudioSource] for a period of silence.
@@ -2504,7 +2524,7 @@ class ConcatenatingAudioSource extends AudioSource {
     this.useLazyPreparation = true,
     ShuffleOrder? shuffleOrder,
   }) : _shuffleOrder = shuffleOrder ?? DefaultShuffleOrder()
-          ..insert(0, children.length);
+    ..insert(0, children.length);
 
   @override
   Future<void> _setup(AudioPlayer player) async {
@@ -2529,7 +2549,7 @@ class ConcatenatingAudioSource extends AudioSource {
         localInitialIndex = ci;
       }
       final childInitialIndex =
-          initialIndexWithinThisChild ? (initialIndex - si) : null;
+      initialIndexWithinThisChild ? (initialIndex - si) : null;
       child._shuffle(initialIndex: childInitialIndex);
       si += childLength;
     }
@@ -2863,12 +2883,12 @@ class LockCachingAudioSource extends StreamAudioSource {
   /// If headers are set, just_audio will create a cleartext local HTTP proxy on
   /// your device to forward HTTP requests with headers included.
   LockCachingAudioSource(
-    this.uri, {
-    this.headers,
-    File? cacheFile,
-    dynamic tag,
-  })  : cacheFile =
-            cacheFile != null ? Future.value(cacheFile) : _getCacheFile(uri),
+      this.uri, {
+        this.headers,
+        File? cacheFile,
+        dynamic tag,
+      })  : cacheFile =
+  cacheFile != null ? Future.value(cacheFile) : _getCacheFile(uri),
         super(tag: tag) {
     _init();
   }
@@ -2910,11 +2930,11 @@ class LockCachingAudioSource extends StreamAudioSource {
 
   /// Get file for caching [uri] with proper extension
   static Future<File> _getCacheFile(final Uri uri) async => File(p.joinAll([
-        (await _getCacheDir()).path,
-        'remote',
-        sha256.convert(utf8.encode(uri.toString())).toString() +
-            p.extension(uri.path),
-      ]));
+    (await _getCacheDir()).path,
+    'remote',
+    sha256.convert(utf8.encode(uri.toString())).toString() +
+        p.extension(uri.path),
+  ]));
 
   Future<File> get _partialCacheFile async =>
       File('${(await cacheFile).path}.part');
@@ -2965,7 +2985,7 @@ class LockCachingAudioSource extends StreamAudioSource {
     // ignore: close_sinks
     final sink = (await _partialCacheFile).openWrite();
     final sourceLength =
-        response.contentLength == -1 ? null : response.contentLength;
+    response.contentLength == -1 ? null : response.contentLength;
     final mimeType = response.headers.contentType.toString();
     final acceptRanges = response.headers.value(HttpHeaders.acceptRangesHeader);
     final originSupportsRangeRequests =
@@ -2988,21 +3008,21 @@ class LockCachingAudioSource extends StreamAudioSource {
       final newPercentProgress = (sourceLength == null)
           ? 0
           : (sourceLength == 0)
-              ? 100
-              : (100 * _progress ~/ sourceLength);
+          ? 100
+          : (100 * _progress ~/ sourceLength);
       updateProgress(newPercentProgress);
       sink.add(data);
       final readyRequests = _requests
           .where((request) =>
-              !originSupportsRangeRequests ||
-              request.start == null ||
-              (request.start!) < _progress)
+      !originSupportsRangeRequests ||
+          request.start == null ||
+          (request.start!) < _progress)
           .toList();
       final notReadyRequests = _requests
           .where((request) =>
-              originSupportsRangeRequests &&
-              request.start != null &&
-              (request.start!) >= _progress)
+      originSupportsRangeRequests &&
+          request.start != null &&
+          (request.start!) >= _progress)
           .toList();
       // Add this live data to any responses in progress.
       for (var cacheResponse in inProgressResponses) {
@@ -3010,7 +3030,7 @@ class LockCachingAudioSource extends StreamAudioSource {
         if (end != null && _progress >= end) {
           // We've received enough data to fulfill the byte range request.
           final subEnd =
-              min(data.length, max(0, data.length - (_progress - end)));
+          min(data.length, max(0, data.length - (_progress - end)));
           cacheResponse.controller.add(data.sublist(0, subEnd));
           cacheResponse.controller.close();
         } else {
@@ -3056,7 +3076,7 @@ class LockCachingAudioSource extends StreamAudioSource {
           rangeRequestsSupported: originSupportsRangeRequests,
           sourceLength: start != null ? sourceLength : null,
           contentLength:
-              effectiveEnd != null ? effectiveEnd - effectiveStart : null,
+          effectiveEnd != null ? effectiveEnd - effectiveStart : null,
           offset: start,
           contentType: mimeType,
           stream: responseStream.asBroadcastStream(),
@@ -3143,14 +3163,14 @@ class LockCachingAudioSource extends StreamAudioSource {
     _requests.add(byteRangeRequest);
     _response ??=
         _fetch().catchError((dynamic error, StackTrace? stackTrace) async {
-      // So that we can restart later
-      _response = null;
-      // Cancel any pending request
-      for (final req in _requests) {
-        req.fail(error, stackTrace);
-      }
-      return Future<HttpClientResponse>.error(error as Object, stackTrace);
-    });
+          // So that we can restart later
+          _response = null;
+          // Cancel any pending request
+          for (final req in _requests) {
+            req.fail(error, stackTrace);
+          }
+          return Future<HttpClientResponse>.error(error as Object, stackTrace);
+        });
     return byteRangeRequest.future.then((response) {
       response.stream.listen((event) {}, onError: (Object e, StackTrace st) {
         // So that we can restart later
@@ -3226,7 +3246,7 @@ typedef _ProxyHandler = void Function(
 _ProxyHandler _proxyHandlerForSource(StreamAudioSource source) {
   Future<void> handler(_ProxyHttpServer server, HttpRequest request) async {
     final rangeRequest =
-        _HttpRangeRequest.parse(request.headers[HttpHeaders.rangeHeader]);
+    _HttpRangeRequest.parse(request.headers[HttpHeaders.rangeHeader]);
 
     request.response.headers.clear();
 
@@ -3234,7 +3254,7 @@ _ProxyHandler _proxyHandlerForSource(StreamAudioSource source) {
     Stream<List<int>> stream;
     try {
       sourceResponse =
-          await source.request(rangeRequest?.start, rangeRequest?.endEx);
+      await source.request(rangeRequest?.start, rangeRequest?.endEx);
       stream = sourceResponse.stream;
     } catch (e, st) {
       // ignore: avoid_print
@@ -3290,10 +3310,10 @@ _ProxyHandler _proxyHandlerForSource(StreamAudioSource source) {
 
 /// A proxy handler for serving audio from a URI with optional headers.
 _ProxyHandler _proxyHandlerForUri(
-  Uri uri, {
-  Map<String, String>? headers,
-  String? userAgent,
-}) {
+    Uri uri, {
+      Map<String, String>? headers,
+      String? userAgent,
+    }) {
   // Keep redirected [Uri] to speed-up requests
   Uri? redirectedUri;
   Future<void> handler(_ProxyHttpServer server, HttpRequest request) async {
@@ -3307,7 +3327,7 @@ _ProxyHandler _proxyHandlerForUri(
       // write supplied headers last (to ensure supplied headers aren't overwritten)
       headers?.forEach((name, value) => requestHeaders[name] = value);
       final originRequest =
-          await _getUrl(client, redirectedUri ?? uri, headers: requestHeaders);
+      await _getUrl(client, redirectedUri ?? uri, headers: requestHeaders);
       host = originRequest.headers.value(HttpHeaders.hostHeader);
       final originResponse = await originRequest.close();
       if (originResponse.redirects.isNotEmpty) {
@@ -3346,7 +3366,7 @@ _ProxyHandler _proxyHandlerForUri(
                   ? ''
                   : uri.path.replaceAll(RegExp(r'/[^/]*$'), '/');
               final nestedUri =
-                  uri.replace(path: '$basePath${rawNestedUri.path}');
+              uri.replace(path: '$basePath${rawNestedUri.path}');
               server.addUriAudioSource(
                   AudioSource.uri(nestedUri, headers: headers));
             }
@@ -3602,16 +3622,16 @@ class _IdleAudioPlayer extends AudioPlayerPlatform {
 
   @override
   Future<SetAutomaticallyWaitsToMinimizeStallingResponse>
-      setAutomaticallyWaitsToMinimizeStalling(
-          SetAutomaticallyWaitsToMinimizeStallingRequest request) async {
+  setAutomaticallyWaitsToMinimizeStalling(
+      SetAutomaticallyWaitsToMinimizeStallingRequest request) async {
     return SetAutomaticallyWaitsToMinimizeStallingResponse();
   }
 
   @override
   Future<SetCanUseNetworkResourcesForLiveStreamingWhilePausedResponse>
-      setCanUseNetworkResourcesForLiveStreamingWhilePaused(
-          SetCanUseNetworkResourcesForLiveStreamingWhilePausedRequest
-              request) async {
+  setCanUseNetworkResourcesForLiveStreamingWhilePaused(
+      SetCanUseNetworkResourcesForLiveStreamingWhilePausedRequest
+      request) async {
     return SetCanUseNetworkResourcesForLiveStreamingWhilePausedResponse();
   }
 
@@ -3667,8 +3687,8 @@ class _IdleAudioPlayer extends AudioPlayerPlatform {
 
   @override
   Future<AndroidLoudnessEnhancerSetTargetGainResponse>
-      androidLoudnessEnhancerSetTargetGain(
-          AndroidLoudnessEnhancerSetTargetGainRequest request) async {
+  androidLoudnessEnhancerSetTargetGain(
+      AndroidLoudnessEnhancerSetTargetGainRequest request) async {
     return AndroidLoudnessEnhancerSetTargetGainResponse();
   }
 }
@@ -3690,7 +3710,7 @@ class AudioPipeline {
     List<AndroidAudioEffect>? androidAudioEffects,
     List<DarwinAudioEffect>? darwinAudioEffects,
   })  : assert(androidAudioEffects == null ||
-            androidAudioEffects.toSet().length == androidAudioEffects.length),
+      androidAudioEffects.toSet().length == androidAudioEffects.length),
         assert(darwinAudioEffects == null ||
             darwinAudioEffects.toSet().length == darwinAudioEffects.length),
         androidAudioEffects = androidAudioEffects ?? const [],
@@ -3784,9 +3804,9 @@ class AndroidLoudnessEnhancer extends AudioEffect with AndroidAudioEffect {
 
   @override
   AudioEffectMessage _toMessage() => AndroidLoudnessEnhancerMessage(
-        enabled: enabled,
-        targetGain: targetGain,
-      );
+    enabled: enabled,
+    targetGain: targetGain,
+  );
 }
 
 /// A frequency band within an [AndroidEqualizer].
@@ -3839,7 +3859,7 @@ class AndroidEqualizerBand {
   }
 
   static AndroidEqualizerBand _fromMessage(
-          AudioPlayer player, AndroidEqualizerBandMessage message) =>
+      AudioPlayer player, AndroidEqualizerBandMessage message) =>
       AndroidEqualizerBand._(
         player: player,
         index: message.index,
@@ -3875,13 +3895,13 @@ class AndroidEqualizerParameters {
   }
 
   static AndroidEqualizerParameters _fromMessage(
-          AudioPlayer player, AndroidEqualizerParametersMessage message) =>
+      AudioPlayer player, AndroidEqualizerParametersMessage message) =>
       AndroidEqualizerParameters(
         minDecibels: message.minDecibels,
         maxDecibels: message.maxDecibels,
         bands: message.bands
             .map((bandMessage) =>
-                AndroidEqualizerBand._fromMessage(player, bandMessage))
+            AndroidEqualizerBand._fromMessage(player, bandMessage))
             .toList(),
       );
 }
@@ -3890,7 +3910,7 @@ class AndroidEqualizerParameters {
 /// frequency bands of an [AudioPlayer]'s audio signal.
 class AndroidEqualizer extends AudioEffect with AndroidAudioEffect {
   final Completer<AndroidEqualizerParameters> _parametersCompleter =
-      Completer<AndroidEqualizerParameters>();
+  Completer<AndroidEqualizerParameters>();
 
   @override
   String get _type => 'AndroidEqualizer';
@@ -3905,7 +3925,7 @@ class AndroidEqualizer extends AudioEffect with AndroidAudioEffect {
     final response = await platform
         .androidEqualizerGetParameters(AndroidEqualizerGetParametersRequest());
     final receivedParameters =
-        AndroidEqualizerParameters._fromMessage(_player!, response.parameters);
+    AndroidEqualizerParameters._fromMessage(_player!, response.parameters);
     _parametersCompleter.complete(receivedParameters);
   }
 
@@ -3915,10 +3935,10 @@ class AndroidEqualizer extends AudioEffect with AndroidAudioEffect {
 
   @override
   AudioEffectMessage _toMessage() => AndroidEqualizerMessage(
-        enabled: enabled,
-        // Parameters are only communicated from the platform.
-        parameters: null,
-      );
+    enabled: enabled,
+    // Parameters are only communicated from the platform.
+    parameters: null,
+  );
 }
 
 bool _isAndroid() => !kIsWeb && Platform.isAndroid;
