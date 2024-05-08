@@ -49,6 +49,9 @@
     BOOL _justAdvanced;
     BOOL _enqueuedAll;
     NSDictionary<NSString *, NSObject *> *_icyMetadata;
+    // custom_change: store flutter error and index to show it when the item with error is played
+    FlutterError *_flutterError;
+    int _flutterErrorIndex;
 }
 
 - (instancetype)initWithRegistrar:(NSObject<FlutterPluginRegistrar> *)registrar playerId:(NSString*)idParam loadConfiguration:(NSDictionary *)loadConfiguration {
@@ -66,6 +69,7 @@
         initWithName:[NSMutableString stringWithFormat:@"com.ryanheise.just_audio.data.%@", _playerId]
            messenger:[registrar messenger]];
     _index = 0;
+//    NSLog(@"index set === %i initWithRegistrar", _index);
     _processingState = none;
     _loopMode = loopOff;
     _shuffleModeEnabled = NO;
@@ -219,8 +223,10 @@
     [self updateOrder];
     if (_player.currentItem) {
         _index = [self indexForItem:(IndexedPlayerItem *)_player.currentItem];
+//        NSLog(@"index set === %i concatenatingInsertAll 1", _index);
     } else {
         _index = 0;
+//        NSLog(@"index set === %i concatenatingInsertAll 2", _index);
     }
     [self enqueueFrom:_index];
     // Notify each new IndexedAudioSource that it's been attached to the player.
@@ -264,8 +270,14 @@
         }
     }
     [self updateOrder];
-    if (_index >= _indexedAudioSources.count) _index = (int)_indexedAudioSources.count - 1;
-    if (_index < 0) _index = 0;
+    if (_index >= _indexedAudioSources.count) {
+        _index = (int)_indexedAudioSources.count - 1;
+//        NSLog(@"index set === %i concatenatingRemoveRange 1", _index);
+    }
+    if (_index < 0) {
+        _index = 0;
+//        NSLog(@"index set === %i concatenatingRemoveRange 2", _index);
+    }
     [self enqueueFrom:_index];
     [self broadcastPlaybackEvent];
 }
@@ -487,7 +499,8 @@
 - (void)enqueueFrom:(int)index {
     //NSLog(@"### enqueueFrom:%d", index);
     
-    //Commented below line due to issue where _index is set in this method but the media at this index fails to play. And also observer "currentItem" is not notified for failed item. So wrong value for _index is set in this case. This case can be observed in playlist. So 'index' is used instead of '_index' in this method.
+    // custom_change: Commented below line due to issue where _index is set in this method but the media at this index fails to play. And also observer "currentItem" is not notified for failed item. So wrong value for _index is set in this case. This case can be observed in playlist. So 'index' is used instead of '_index' in this method.
+    // custom_change_update: This logic may now not be required because we have changed player 'actionAtItemEnd' to 'AVPlayerActionAtItemEndNone' for our required behaviour.
 //    _index = index;
 
     // Update the queue while keeping the currently playing item untouched.
@@ -583,6 +596,9 @@
     }
 
     [self updateEndAction];
+    
+    // custom_change: when item is played, check for stored error and send if necessary
+    [self checkCurrentlySavedFlutterErrorAndSend:index];
 }
 
 - (void)updatePosition {
@@ -600,6 +616,7 @@
     _loadResult = result;
     _processingState = loading;
     _index = (initialIndex != (id)[NSNull null]) ? [initialIndex intValue] : 0;
+//    NSLog(@"index set === %i load", _index);
     // Remove previous observers
     if (_indexedAudioSources) {
         for (int i = 0; i < [_indexedAudioSources count]; i++) {
@@ -653,6 +670,8 @@
     // Set up an empty player
     if (!_player) {
         _player = [[AVQueuePlayer alloc] initWithItems:@[]];
+        // custom_change: set 'actionAtItemEnd' as 'AVPlayerActionAtItemEndNone' as custom requirement is to not skip to next item on error. Playing next item on item end is handled in 'onComplete' method. This change also seems to resolve issue of _index being changed erratically.
+        _player.actionAtItemEnd = AVPlayerActionAtItemEndNone;
         if (@available(macOS 10.12, iOS 10.0, *)) {
             _player.automaticallyWaitsToMinimizeStalling = _automaticallyWaitsToMinimizeStalling;
             // TODO: Remove these observers in dispose.
@@ -749,14 +768,21 @@
     } else if (_loopMode == loopAll) {
         [endedSource seek:kCMTimeZero];
         _index = [_order[([_orderInv[_index] intValue] + 1) % _order.count] intValue];
+//        NSLog(@"index set === %i onComplete 1", _index);
         [self broadcastPlaybackEvent];
         _justAdvanced = YES;
     } else if ([_orderInv[_index] intValue] + 1 < [_order count]) {
         [endedSource seek:kCMTimeZero];
-        _index = [_order[([_orderInv[_index] intValue] + 1)] intValue];
-        [self updateEndAction];
-        [self broadcastPlaybackEvent];
-        _justAdvanced = YES;
+        int expectedNewIndex = [_order[([_orderInv[_index] intValue] + 1)] intValue];
+        // custom_change: in case of item end due to successful completion but not error, play next item by calling 'enqueueFrom' method manually since we have changed player 'actionAtItemEnd' to 'AVPlayerActionAtItemEndNone'
+        if (_index != _flutterErrorIndex) {
+            [self enqueueFrom:expectedNewIndex];
+            _index = expectedNewIndex;
+//            NSLog(@"index set === %i onComplete 2", _index);
+            [self updateEndAction];
+            [self broadcastPlaybackEvent];
+            _justAdvanced = YES;
+        }
     } else {
         // reached end of playlist
         [self complete];
@@ -890,11 +916,15 @@
     } else if ([keyPath isEqualToString:@"currentItem"] && _player.currentItem) {
         IndexedPlayerItem *playerItem = (IndexedPlayerItem *)change[NSKeyValueChangeNewKey];
         int currentItemIndex = [self indexForItem:playerItem];
+//        NSLog(@"index set === currentItem changed to %i", currentItemIndex);
         //IndexedPlayerItem *oldPlayerItem = (IndexedPlayerItem *)change[NSKeyValueChangeOldKey];
-        if (playerItem.status == AVPlayerItemStatusFailed) {
+        
+        //custom_change: Since we have changed player 'actionAtItemEnd' to 'AVPlayerActionAtItemEndNone', it will not play next item in queue automatically on fail. So commenting below code which increments '_index'
+        /*if (playerItem.status == AVPlayerItemStatusFailed) {
             if ([_orderInv[currentItemIndex] intValue] + 1 < [_order count]) {
                 // account for automatic move to next item
                 _index = [_order[[_orderInv[currentItemIndex] intValue] + 1] intValue];
+                NSLog(@"index set === %i currentItem 1", _index);
                 //NSLog(@"advance to next on error: index = %d", _index);
                 [self updateEndAction];
                 [self broadcastPlaybackEvent];
@@ -902,16 +932,17 @@
                 //NSLog(@"error on last item");
             }
             return;
-        } else {
+        } else {*/
             if (_index != currentItemIndex) {
                 // AVQueuePlayer will sometimes skip over error items without
                 // notifying this observer.
                 //NSLog(@"Queue change detected. Adjusting index from %d -> %d", _index, expectedIndex);
                 _index = currentItemIndex;
+//                NSLog(@"index set === %i currentItem 2", _index);
                 [self updateEndAction];
                 [self broadcastPlaybackEvent];
             }
-        }
+//        }
         //NSLog(@"currentItem changed. _index=%d", _index);
         _bufferUnconfirmed = YES;
         // If we've skipped or transitioned to a new item and we're not
@@ -982,23 +1013,39 @@
 }
 
 - (void)sendErrorForItem:(IndexedPlayerItem *)playerItem {
+    int index = [self indexForItem:playerItem];
     FlutterError *flutterError = [FlutterError errorWithCode:[NSString stringWithFormat:@"%d", (int)playerItem.error.code]
                                                      message:playerItem.error.localizedDescription
-                                                     details:@{@"index": @([self indexForItem:playerItem])}];
+                                                     details:@{@"index": @(index)}];
+    
+    // custom_change: saving '_flutterError' and '_flutterErrorIndex' for future use since we get error for next item before next item is played
+    _flutterError = flutterError;
+    _flutterErrorIndex = index;
+    
     [self sendError:flutterError playerItem:playerItem];
 }
 
 - (void)sendError:(FlutterError *)flutterError playerItem:(IndexedPlayerItem *)playerItem {
     //NSLog(@"sendError");
     if(playerItem == _player.currentItem) {
+        // custom_change: broadcasting error only if it is for current item
         [_eventChannel sendEvent:flutterError];
         if (_loadResult) {
             _loadResult(flutterError);
             _loadResult = nil;
         }
     }
+    
+    // custom_change: not broadcasting error if error is not for current item
     // Broadcast all errors even if they aren't on the current item.
 //    [_eventChannel sendEvent:flutterError];
+}
+
+// custom_change: check saved error with passed play index. send error if it matches.
+- (void)checkCurrentlySavedFlutterErrorAndSend:(int) playIndex {
+    if(playIndex == _flutterErrorIndex) {
+        [_eventChannel sendEvent:_flutterError];
+    }
 }
 
 - (void)abortExistingConnection {
@@ -1018,10 +1065,12 @@
 }
 
 - (void)play {
+//    NSLog(@"function called === play");
     [self play:nil];
 }
 
 - (void)play:(FlutterResult)result {
+//    NSLog(@"function called === play with result");
     if (_playing) {
         if (result) {
             result(@{});
@@ -1119,18 +1168,20 @@
 }
 
 - (void)updateEndAction {
+    //custom_change: commenting all below codes as we have set player 'actionAtItemEnd' as 'AVPlayerActionAtItemEndNone' for out required behaviour.
+    
     // Should be called in the following situations:
     // - when the audio source changes
     // - when _index changes
     // - when the loop mode changes.
     // - when the shuffle order changes. (TODO)
     // - when the shuffle mode changes.
-    if (!_player) return;
-    if (_audioSource && (_loopMode != loopOff || ([_order count] > 0 && [_orderInv[_index] intValue] + 1 < [_order count]))) {
-        _player.actionAtItemEnd = AVPlayerActionAtItemEndAdvance;
-    } else {
-        _player.actionAtItemEnd = AVPlayerActionAtItemEndPause; // AVPlayerActionAtItemEndNone
-    }
+//    if (!_player) return;
+//    if (_audioSource && (_loopMode != loopOff || ([_order count] > 0 && [_orderInv[_index] intValue] + 1 < [_order count]))) {
+//        _player.actionAtItemEnd = AVPlayerActionAtItemEndAdvance;
+//    } else {
+//        _player.actionAtItemEnd = AVPlayerActionAtItemEndPause; // AVPlayerActionAtItemEndNone
+//    }
 }
 
 - (void)setShuffleModeEnabled:(BOOL)shuffleModeEnabled {
