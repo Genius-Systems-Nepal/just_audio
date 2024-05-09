@@ -55,8 +55,10 @@
 }
 
 - (instancetype)initWithRegistrar:(NSObject<FlutterPluginRegistrar> *)registrar playerId:(NSString*)idParam loadConfiguration:(NSDictionary *)loadConfiguration {
+//    NSLog(@"function called === initWithRegistrar");
     self = [super init];
     NSAssert(self, @"super init cannot be nil");
+    _flutterErrorIndex = -1;
     _registrar = registrar;
     _playerId = idParam;
     _methodChannel =
@@ -497,6 +499,7 @@
 }
 
 - (void)enqueueFrom:(int)index {
+//    NSLog(@"function called === enqueueFrom");
     //NSLog(@"### enqueueFrom:%d", index);
     
     // custom_change: Commented below line due to issue where _index is set in this method but the media at this index fails to play. And also observer "currentItem" is not notified for failed item. So wrong value for _index is set in this case. This case can be observed in playlist. So 'index' is used instead of '_index' in this method.
@@ -607,6 +610,7 @@
 }
 
 - (void)load:(NSDictionary *)source initialPosition:(CMTime)initialPosition initialIndex:(NSNumber *)initialIndex result:(FlutterResult)result {
+//    NSLog(@"function called === load");
     if (_playing) {
         [_player pause];
     }
