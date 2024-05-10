@@ -691,6 +691,9 @@
                   forKeyPath:@"currentItem"
                      options:NSKeyValueObservingOptionNew
                      context:nil];
+        // custom_change: related_change_1
+        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(onAppForeground) name:UIApplicationDidBecomeActiveNotification object:nil];
+        
         // TODO: learn about the different ways to define weakSelf.
         //__weak __typeof__(self) weakSelf = self;
         //typeof(self) __weak weakSelf = self;
@@ -729,6 +732,11 @@
     /* for (int i = 0; i < [_indexedAudioSources count]; i++) { */
     /*     NSLog(@"- %@", _indexedAudioSources[i].sourceId); */
     /* } */
+}
+
+- (void)onAppForeground {
+    // custom_change: related_change_1: To send error for current item on app coming to foreground
+    [self checkCurrentlySavedFlutterErrorAndSend:_index];
 }
 
 - (void)updateOrder {
@@ -1033,7 +1041,7 @@
     //NSLog(@"sendError");
     if(playerItem == _player.currentItem) {
         // custom_change: broadcasting error only if it is for current item
-        [_eventChannel sendEvent:flutterError];
+        [self checkApplicationStateAndSendError:flutterError];
         if (_loadResult) {
             _loadResult(flutterError);
             _loadResult = nil;
@@ -1048,7 +1056,14 @@
 // custom_change: check saved error with passed play index. send error if it matches.
 - (void)checkCurrentlySavedFlutterErrorAndSend:(int) playIndex {
     if(playIndex == _flutterErrorIndex) {
-        [_eventChannel sendEvent:_flutterError];
+        [self checkApplicationStateAndSendError:_flutterError];
+    }
+}
+
+// custom_change: related_change_send_error: This is a workaround as dart code in main project stops the player on getting error and MPNowPlayingInfoCenter sets empty but opens apple music player on tap when app is in background. So to prevent it, not sending error when app is in background.
+- (void)checkApplicationStateAndSendError:(FlutterError *)flutterError {
+    if (UIApplication.sharedApplication.applicationState == UIApplicationStateActive) {
+        [_eventChannel sendEvent:flutterError];
     }
 }
 
@@ -1414,6 +1429,7 @@
         if (@available(macOS 10.12, iOS 10.0, *)) {
             [_player removeObserver:self forKeyPath:@"timeControlStatus"];
         }
+        [[NSNotificationCenter defaultCenter] removeObserver:self name:UIApplicationDidBecomeActiveNotification object:nil];
         _player = nil;
     }
     // Untested:
